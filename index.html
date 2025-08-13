@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Jogo de Cartas 1v1</title>
+<style>
+  body { font-family: Arial; background: #222; color: white; text-align: center; }
+  #game { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Jogo de Cartas 1v1</h1>
+
+<div id="menu">
+  <button id="createBtn">Criar Sala</button>
+  <input id="roomCode" maxlength="4" placeholder="Código" style="text-transform: uppercase;">
+  <button id="joinBtn">Entrar na Sala</button>
+  <p id="status"></p>
+</div>
+
+<div id="game">
+  <p>Sua vida: <span id="myLife">3</span></p>
+  <p>Vida do oponente: <span id="opLife">3</span></p>
+  <button id="playCard">Jogar carta (1 de dano)</button>
+</div>
+
+<script>
+let ws;
+let pc;
+let dataChannel;
+let myLife = 3;
+let opLife = 3;
+
+function connectWS() {
+  // Troque esta URL pelo endereço do servidor no Render
+  ws = new WebSocket("wss://SEU-PROJETO.onrender.com");
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+
+    if (msg.type === "roomCreated") {
+      document.getElementById("status").innerText = "Sala criada: " + msg.code;
+      startWebRTC(true);
+    }
+    if (msg.type === "guestJoined") {
+      createOffer();
+    }
+    if (msg.type === "joinedRoom") {
+      document.getElementById("status").innerText = "Entrou na sala " + msg.code;
+      startWebRTC(false);
+    }
+    if (msg.type === "signal") {
+      handleSignal(msg.data);
+    }
+    if (msg.type === "error") {
+      document.getElementById("status").innerText = msg.message;
+    }
+  };
+}
+
+document.getElementById("createBtn").onclick = () => {
+  connectWS();
+  ws.onopen = () => ws.send(JSON.stringify({ type: "create" }));
+};
+
+document.getElementById("joinBtn").onclick = () => {
+  const code = document.getElementById("roomCode").value.toUpperCase();
+  if (!code) return;
+  connectWS();
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", code }));
+};
+
+function startWebRTC(isHost) {
+  pc = new RTCPeerConnection();
+  pc.ondatachannel = (event) => {
+    dataChannel = event.channel;
+    setupDataChannel();
+  };
+  if (isHost) {
+    dataChannel = pc.createDataChannel("game");
+    setupDataChannel();
+  }
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      ws.send(JSON.stringify({ type: "signal", data: { candidate: event.candidate } }));
+    }
+  };
+}
+
+function setupDataChannel() {
+  dataChannel.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.action === "damage") {
+      myLife -= 1;
+      document.getElementById("myLife").innerText = myLife;
+    }
+  };
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("game").style.display = "block";
+}
+
+async function createOffer() {
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  ws.send(JSON.stringify({ type: "signal", data: { sdp: offer } }));
+}
+
+async function handleSignal(data) {
+  if (data.sdp) {
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    if (data.sdp.type === "offer") {
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      ws.send(JSON.stringify({ type: "signal", data: { sdp: answer } }));
+    }
+  } else if (data.candidate) {
+    await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  }
+}
+
+document.getElementById("playCard").onclick = () => {
+  if (dataChannel && dataChannel.readyState === "open") {
+    dataChannel.send(JSON.stringify({ action: "damage" }));
+    opLife -= 1;
+    document.getElementById("opLife").innerText = opLife;
+  }
+};
+</script>
+
+</body>
+</html>
