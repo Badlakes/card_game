@@ -34,7 +34,8 @@ let opLife = 3;
 
 function connectWS() {
   // Troque esta URL pelo endereço do servidor no Render
-  ws = new WebSocket("wss://SEU-PROJETO.onrender.com");
+  ws = new WebSocket("https://card-game-v99f.onrender.com");
+
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
@@ -130,3 +131,4 @@ document.getElementById("playCard").onclick = () => {
 
 </body>
 </html>
+
