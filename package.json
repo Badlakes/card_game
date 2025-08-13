@@ -2,8 +2,10 @@
   "name": "jogo-cartas-p2p",
   "version": "1.0.0",
   "main": "server.js",
-  "license": "MIT",
   "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "ws": "^8.13.0"
   }
